@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with Strangers</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-2xl">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <!-- Login Section -->
+            <div id="login-section" class="space-y-4">
+                <h1 class="text-2xl font-bold text-center text-gray-800">Chat with Strangers</h1>
+                <div class="space-y-2">
+                    <input type="text" id="username" placeholder="Enter your name" 
+                           class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <button onclick="connectToStranger()" 
+                            class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition">
+                        Connect with Stranger
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chat Section (Initially Hidden) -->
+            <div id="chat-section" class="hidden space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-semibold">Chatting with: <span id="stranger-name" class="text-blue-500"></span></h2>
+                    <button onclick="disconnect()" 
+                            class="bg-red-500 text-white px-4 py-1 rounded hover:bg-red-600 transition">
+                        Disconnect
+                    </button>
+                </div>
+                <div id="messages" class="h-96 overflow-y-auto space-y-2 p-4 border rounded"></div>
+                <div class="flex space-x-2">
+                    <input type="text" id="message-input" 
+                           class="flex-1 p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                           placeholder="Type your message...">
+                    <button onclick="sendMessage()" 
+                            class="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600 transition">
+                        Send
+                    </button>
+                </div>
+            </div>
+
+            <!-- Waiting Section (Initially Hidden) -->
+            <div id="waiting-section" class="hidden text-center py-8">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                <p class="text-gray-600">Waiting for a stranger to connect...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentRoom = null;
+        let userName = '';
+
+        function connectToStranger() {
+            userName = document.getElementById('username').value.trim();
+            if (!userName) {
+                alert('Please enter your name');
+                return;
+            }
+
+            document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('waiting-section').classList.remove('hidden');
+            
+            socket.emit('join_waiting_room', {
+                name: userName,
+                sid: socket.id
+            });
+        }
+
+        socket.on('waiting', () => {
+            document.getElementById('chat-section').classList.add('hidden');
+            document.getElementById('waiting-section').classList.remove('hidden');
+        });
+
+        socket.on('matched', (data) => {
+            currentRoom = data.room;
+            document.getElementById('waiting-section').classList.add('hidden');
+            document.getElementById('chat-section').classList.remove('hidden');
+            document.getElementById('stranger-name').textContent = data.stranger_name;
+            addSystemMessage(`You are now connected with ${data.stranger_name}`);
+        });
+
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            
+            if (message && currentRoom) {
+                socket.emit('send_message', {
+                    room: currentRoom,
+                    message: message,
+                    sender: userName
+                });
+                input.value = '';
+                addMessage(message, 'You');
+            }
+        }
+
+        socket.on('new_message', (data) => {
+            if (data.sender !== userName) {
+                addMessage(data.message, data.sender);
+            }
+        });
+
+        socket.on('stranger_disconnected', () => {
+            addSystemMessage('Stranger has disconnected');
+            currentRoom = null;
+            document.getElementById('chat-section').classList.add('hidden');
+            document.getElementById('login-section').classList.remove('hidden');
+        });
+
+        function addMessage(message, sender) {
+            const messagesDiv = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            const isOwnMessage = sender === 'You';
+            
+            messageElement.className = `p-2 rounded-lg max-w-[80%] ${
+                isOwnMessage ? 'ml-auto bg-blue-500 text-white' : 'bg-gray-200'
+            }`;
+            messageElement.innerHTML = `
+                <div class="text-sm font-semibold">${sender}</div>
+                <div>${message}</div>
+            `;
+            
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addSystemMessage(message) {
+            const messagesDiv = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            messageElement.className = 'text-center text-gray-500 text-sm py-2';
+            messageElement.textContent = message;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function disconnect() {
+            socket.disconnect();
+            socket.connect();
+            currentRoom = null;
+            document.getElementById('chat-section').classList.add('hidden');
+            document.getElementById('login-section').classList.remove('hidden');
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        // Handle enter key in message input
+        document.getElementById('message-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
