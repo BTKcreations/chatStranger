@@ -100,6 +100,32 @@ def handle_message(data):
     except Exception as e:
         app.logger.error(f"Error in handle_message: {str(e)}")
 
+@socketio.on('typing')
+def handle_typing(data):
+    try:
+        room = data.get('room')
+        username = data.get('username', '').strip()[:50]
+        if room and username and room in active_connections:
+            emit('typing_status', {
+                'username': username,
+                'isTyping': True
+            }, to=room)
+    except Exception as e:
+        app.logger.error(f"Error in handle_typing: {str(e)}")
+
+@socketio.on('stop_typing')
+def handle_stop_typing(data):
+    try:
+        room = data.get('room')
+        username = data.get('username', '').strip()[:50]
+        if room and username and room in active_connections:
+            emit('typing_status', {
+                'username': username,
+                'isTyping': False
+            }, to=room)
+    except Exception as e:
+        app.logger.error(f"Error in handle_stop_typing: {str(e)}")
+
 @socketio.on('disconnect')
 def handle_disconnect():
     try:

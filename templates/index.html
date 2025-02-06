@@ -6,6 +6,7 @@
     <title>Chat with Strangers</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100 min-h-screen">
     <div class="container mx-auto px-4 py-8 max-w-2xl">
@@ -18,28 +19,45 @@
                            class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
                     <button onclick="connectToStranger()" 
                             class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition">
-                        Connect with Stranger
+                        <i class="fas fa-random mr-2"></i>Connect with Stranger
                     </button>
                 </div>
             </div>
 
             <!-- Chat Section (Initially Hidden) -->
             <div id="chat-section" class="hidden space-y-4">
-                <div class="flex justify-between items-center">
-                    <h2 class="text-xl font-semibold">Chatting with: <span id="stranger-name" class="text-blue-500"></span></h2>
-                    <button onclick="disconnect()" 
-                            class="bg-red-500 text-white px-4 py-1 rounded hover:bg-red-600 transition">
-                        Disconnect
-                    </button>
+                <div class="flex justify-between items-center border-b pb-4">
+                    <div>
+                        <h2 class="text-xl font-semibold">Chatting with: <span id="stranger-name" class="text-blue-500"></span></h2>
+                        <div id="typing-indicator" class="text-sm text-gray-500 hidden">
+                            <i class="fas fa-pencil-alt mr-1"></i><span></span>
+                        </div>
+                    </div>
+                    <div class="space-x-2">
+                        <button onclick="findNewStranger()" 
+                                class="bg-blue-500 text-white px-4 py-1 rounded hover:bg-blue-600 transition">
+                            <i class="fas fa-random mr-1"></i>New
+                        </button>
+                        <button onclick="disconnect()" 
+                                class="bg-red-500 text-white px-4 py-1 rounded hover:bg-red-600 transition">
+                            <i class="fas fa-times mr-1"></i>Leave
+                        </button>
+                    </div>
                 </div>
-                <div id="messages" class="h-96 overflow-y-auto space-y-2 p-4 border rounded"></div>
+                <div id="messages" class="h-96 overflow-y-auto space-y-2 p-4 border rounded bg-gray-50"></div>
                 <div class="flex space-x-2">
-                    <input type="text" id="message-input" 
-                           class="flex-1 p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-                           placeholder="Type your message...">
+                    <div class="relative flex-1">
+                        <input type="text" id="message-input" 
+                               class="w-full p-2 pr-10 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                               placeholder="Type your message...">
+                        <button onclick="toggleEmoji()" 
+                                class="absolute right-2 top-2 text-gray-500 hover:text-gray-700">
+                            <i class="far fa-smile"></i>
+                        </button>
+                    </div>
                     <button onclick="sendMessage()" 
                             class="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600 transition">
-                        Send
+                        <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
             </div>
@@ -48,6 +66,22 @@
             <div id="waiting-section" class="hidden text-center py-8">
                 <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
                 <p class="text-gray-600">Waiting for a stranger to connect...</p>
+                <button onclick="cancelSearch()" 
+                        class="mt-4 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition">
+                    <i class="fas fa-times mr-1"></i>Cancel
+                </button>
+            </div>
+
+            <!-- Error Modal (Initially Hidden) -->
+            <div id="error-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full mx-4">
+                    <h3 class="text-lg font-bold mb-4">Error</h3>
+                    <p id="error-message" class="text-gray-700 mb-4"></p>
+                    <button onclick="closeErrorModal()" 
+                            class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition">
+                        OK
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -56,11 +90,12 @@
         const socket = io();
         let currentRoom = null;
         let userName = '';
+        let typingTimeout = null;
 
         function connectToStranger() {
             userName = document.getElementById('username').value.trim();
             if (!userName) {
-                alert('Please enter your name');
+                showError('Please enter your name');
                 return;
             }
 
@@ -73,6 +108,18 @@
             });
         }
 
+        function findNewStranger() {
+            disconnect();
+            connectToStranger();
+        }
+
+        function cancelSearch() {
+            document.getElementById('waiting-section').classList.add('hidden');
+            document.getElementById('login-section').classList.remove('hidden');
+            socket.disconnect();
+            socket.connect();
+        }
+
         socket.on('waiting', () => {
             document.getElementById('chat-section').classList.add('hidden');
             document.getElementById('waiting-section').classList.remove('hidden');
@@ -83,6 +130,7 @@
             document.getElementById('waiting-section').classList.add('hidden');
             document.getElementById('chat-section').classList.remove('hidden');
             document.getElementById('stranger-name').textContent = data.stranger_name;
+            document.getElementById('messages').innerHTML = '';
             addSystemMessage(`You are now connected with ${data.stranger_name}`);
         });
 
@@ -98,8 +146,33 @@
                 });
                 input.value = '';
                 addMessage(message, 'You');
+                socket.emit('stop_typing', { room: currentRoom, username: userName });
             }
         }
+
+        function handleTyping() {
+            if (currentRoom) {
+                socket.emit('typing', { room: currentRoom, username: userName });
+                
+                if (typingTimeout) {
+                    clearTimeout(typingTimeout);
+                }
+                
+                typingTimeout = setTimeout(() => {
+                    socket.emit('stop_typing', { room: currentRoom, username: userName });
+                }, 1000);
+            }
+        }
+
+        socket.on('typing_status', (data) => {
+            const typingIndicator = document.getElementById('typing-indicator');
+            if (data.isTyping && data.username !== userName) {
+                typingIndicator.querySelector('span').textContent = `${data.username} is typing...`;
+                typingIndicator.classList.remove('hidden');
+            } else {
+                typingIndicator.classList.add('hidden');
+            }
+        });
 
         socket.on('new_message', (data) => {
             if (data.sender !== userName) {
@@ -114,6 +187,12 @@
             document.getElementById('login-section').classList.remove('hidden');
         });
 
+        socket.on('error', (data) => {
+            showError(data.message);
+            document.getElementById('waiting-section').classList.add('hidden');
+            document.getElementById('login-section').classList.remove('hidden');
+        });
+
         function addMessage(message, sender) {
             const messagesDiv = document.getElementById('messages');
             const messageElement = document.createElement('div');
@@ -124,7 +203,7 @@
             }`;
             messageElement.innerHTML = `
                 <div class="text-sm font-semibold">${sender}</div>
-                <div>${message}</div>
+                <div class="break-words">${escapeHtml(message)}</div>
             `;
             
             messagesDiv.appendChild(messageElement);
@@ -140,6 +219,15 @@
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
+        function showError(message) {
+            document.getElementById('error-message').textContent = message;
+            document.getElementById('error-modal').classList.remove('hidden');
+        }
+
+        function closeErrorModal() {
+            document.getElementById('error-modal').classList.add('hidden');
+        }
+
         function disconnect() {
             socket.disconnect();
             socket.connect();
@@ -149,10 +237,28 @@
             document.getElementById('messages').innerHTML = '';
         }
 
-        // Handle enter key in message input
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Event Listeners
         document.getElementById('message-input').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 sendMessage();
+            }
+        });
+
+        document.getElementById('message-input').addEventListener('input', handleTyping);
+
+        // Handle page refresh/close
+        window.addEventListener('beforeunload', () => {
+            if (currentRoom) {
+                socket.disconnect();
             }
         });
     </script>
