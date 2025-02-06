@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+    <rect width="32" height="32" rx="8" fill="#3B82F6"/>
+    <!-- Chat Bubbles -->
+    <g transform="translate(4, 8)">
+        <!-- Left Bubble -->
+        <path d="M8 16c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8c0 2.1-.8 4-2.1 5.4l.8 2.6-3-1.2c-1.1.8-2.4 1.2-3.7 1.2z" 
+              fill="white"/>
+        <!-- Right Bubble -->
+        <path d="M18 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4c0 1.1.4 2 1.1 2.7l-.4 1.3 1.5-.6c.6.4 1.2.6 1.8.6z" 
+              fill="#93C5FD"/>
+    </g>
+</svg>

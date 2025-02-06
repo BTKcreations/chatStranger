@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import random
 import string
@@ -24,6 +24,14 @@ active_connections = {}
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/static/<path:path>')
+def send_static(path):
+    return send_from_directory('static', path)
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory('static', 'favicon.svg')
 
 @socketio.on('join_waiting_room')
 def handle_join_waiting_room(data):

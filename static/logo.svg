@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="50" viewBox="0 0 200 50" xmlns="http://www.w3.org/2000/svg">
+    <!-- Chat Bubbles -->
+    <g transform="translate(10, 10)">
+        <!-- Left Bubble -->
+        <path d="M20 30c-11 0-20-6.7-20-15S9 0 20 0s20 6.7 20 15c0 4-2 7.5-5 10l2 5-7-3c-3 2-6.3 3-10 3z" 
+              fill="#3B82F6"/>
+        <!-- Right Bubble -->
+        <path d="M65 25c8.3 0 15-5 15-11.2S73.3 2.5 65 2.5s-15 5-15 11.3c0 3 1.5 5.6 4 7.5L52 26l5.3-2.2c2.3 1.4 4.8 2 7.7 2z" 
+              fill="#60A5FA"/>
+    </g>
+    <!-- Text -->
+    <text x="100" y="32" font-family="Arial, sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="#1F2937">
+        ChatStranger
+    </text>
+</svg>
