@@ -15,7 +15,7 @@ socketio = SocketIO(app,
 
 # Global variables for user tracking
 online_users = 0
-waiting_users = []
+waiting_users = []  # List of dictionaries containing user info
 user_rooms = {}
 
 @app.route('/')
@@ -39,8 +39,7 @@ def handle_disconnect():
     
     # Remove user from waiting list if they were waiting
     sid = request.sid
-    if sid in waiting_users:
-        waiting_users.remove(sid)
+    waiting_users[:] = [u for u in waiting_users if u['sid'] != sid]
     
     # Leave room if user was in one
     if sid in user_rooms:
@@ -56,28 +55,33 @@ def handle_disconnect():
 @socketio.on('join_waiting_room')
 def handle_join_waiting(data):
     try:
+        global waiting_users
         sid = request.sid
-        name = data.get('name', '')
+        name = data.get('name', '').strip()[:50]  # Limit username length
+        
+        # Remove existing entry if user is already waiting
+        waiting_users[:] = [u for u in waiting_users if u['sid'] != sid]
         
         # Add user to waiting list
-        if sid not in waiting_users:
-            waiting_users.append(sid)
+        user_data = {'sid': sid, 'name': name}
+        waiting_users.append(user_data)
         
         # Try to match with another waiting user
         if len(waiting_users) >= 2:
-            user1_sid = waiting_users.pop(0)
-            user2_sid = waiting_users.pop(0)
+            user1 = waiting_users.pop(0)
+            user2 = waiting_users.pop(0)
             
             # Create a room
             room = secrets.token_hex(8)
             join_room(room)
             
             # Store room information
-            user_rooms[user1_sid] = room
-            user_rooms[user2_sid] = room
+            user_rooms[user1['sid']] = room
+            user_rooms[user2['sid']] = room
             
             # Notify users
-            emit('matched', {'room': room, 'stranger_name': name}, room=room)
+            emit('matched', {'room': room, 'stranger_name': user2['name']}, to=user1['sid'])
+            emit('matched', {'room': room, 'stranger_name': user1['name']}, to=user2['sid'])
         
         emit('user_count_update', {'online': online_users, 'waiting': len(waiting_users)}, broadcast=True)
         
