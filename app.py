@@ -18,7 +18,8 @@ socketio = SocketIO(app,
 # Store waiting users and active connections (with a maximum limit)
 MAX_WAITING_USERS = 100
 MAX_ACTIVE_CONNECTIONS = 50
-waiting_users = []
+online_users = 0
+waiting_users = 0
 active_connections = {}
 
 @app.route('/')
@@ -33,9 +34,40 @@ def send_static(path):
 def favicon():
     return send_from_directory('static', 'favicon.svg')
 
+@socketio.on('connect')
+def handle_connect():
+    global online_users
+    online_users += 1
+    emit('user_count_update', {'online': online_users, 'waiting': waiting_users}, broadcast=True)
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    global online_users
+    online_users -= 1
+    emit('user_count_update', {'online': online_users, 'waiting': waiting_users}, broadcast=True)
+    try:
+        sid = request.sid
+        # Remove from waiting list
+        waiting_users[:] = [u for u in waiting_users if u['sid'] != sid]
+        
+        # Handle active connections
+        rooms_to_remove = []
+        for room_id, users in active_connections.items():
+            if users['user1']['sid'] == sid or users['user2']['sid'] == sid:
+                emit('stranger_disconnected', to=room_id)
+                rooms_to_remove.append(room_id)
+                
+        for room_id in rooms_to_remove:
+            del active_connections[room_id]
+    except Exception as e:
+        app.logger.error(f"Error in handle_disconnect: {str(e)}")
+
 @socketio.on('join_waiting_room')
 def handle_join_waiting_room(data):
     try:
+        global waiting_users
+        waiting_users += 1
+        emit('user_count_update', {'online': online_users, 'waiting': waiting_users}, broadcast=True)
         user_name = data.get('name', '').strip()[:50]  # Limit username length
         sid = request.sid  # Use request.sid instead of data['sid']
         
@@ -134,24 +166,17 @@ def handle_stop_typing(data):
     except Exception as e:
         app.logger.error(f"Error in handle_stop_typing: {str(e)}")
 
-@socketio.on('disconnect')
-def handle_disconnect():
-    try:
-        sid = request.sid
-        # Remove from waiting list
-        waiting_users[:] = [u for u in waiting_users if u['sid'] != sid]
-        
-        # Handle active connections
-        rooms_to_remove = []
-        for room_id, users in active_connections.items():
-            if users['user1']['sid'] == sid or users['user2']['sid'] == sid:
-                emit('stranger_disconnected', to=room_id)
-                rooms_to_remove.append(room_id)
-                
-        for room_id in rooms_to_remove:
-            del active_connections[room_id]
-    except Exception as e:
-        app.logger.error(f"Error in handle_disconnect: {str(e)}")
+@socketio.on('leave_waiting_room')
+def handle_leave_waiting_room():
+    global waiting_users
+    waiting_users -= 1
+    emit('user_count_update', {'online': online_users, 'waiting': waiting_users}, broadcast=True)
+
+@socketio.on('matched')
+def handle_matched(data):
+    global waiting_users
+    waiting_users -= 2  # Both users are no longer waiting
+    emit('user_count_update', {'online': online_users, 'waiting': waiting_users}, broadcast=True)
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))

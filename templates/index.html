@@ -100,10 +100,29 @@
         .bottom-sheet.inactive {
             transform: translateY(100%);
         }
+        
+        .stats-bar {
+            background: linear-gradient(to right, #2563eb, #3b82f6);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
     </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-    <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-4xl">
+    <!-- Stats Bar -->
+    <div class="stats-bar text-white py-2 px-4 fixed top-0 left-0 right-0 z-50">
+        <div class="container mx-auto flex justify-center items-center space-x-6 text-sm sm:text-base">
+            <div class="flex items-center">
+                <i class="fas fa-users text-blue-200 mr-2"></i>
+                <span><span id="online-users" class="font-bold">0</span> online</span>
+            </div>
+            <div class="flex items-center">
+                <i class="fas fa-clock text-blue-200 mr-2"></i>
+                <span><span id="waiting-users" class="font-bold">0</span> waiting</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-4xl pt-16">
         <!-- Main Card -->
         <div class="glass-effect rounded-xl shadow-2xl p-4 sm:p-6 mb-4 sm:mb-8 mobile-full">
             <!-- Logo -->
@@ -247,11 +266,46 @@
     <script>
         const socket = io();
         let currentRoom = null;
-        let userName = '';
         let typingTimeout = null;
 
+        // User count update handler
+        socket.on('user_count_update', function(data) {
+            const onlineElement = document.getElementById('online-users');
+            const waitingElement = document.getElementById('waiting-users');
+            
+            // Animate old number to new number
+            animateNumber(onlineElement, parseInt(onlineElement.textContent), data.online);
+            animateNumber(waitingElement, parseInt(waitingElement.textContent), data.waiting);
+            
+            // Add pulse effect
+            [onlineElement, waitingElement].forEach(element => {
+                element.classList.add('animate-pulse');
+                setTimeout(() => element.classList.remove('animate-pulse'), 1000);
+            });
+        });
+
+        // Animate number change
+        function animateNumber(element, start, end) {
+            const duration = 500;
+            const startTime = performance.now();
+            
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                const current = Math.round(start + (end - start) * progress);
+                element.textContent = current;
+                
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+            
+            requestAnimationFrame(update);
+        }
+
         function connectToStranger() {
-            userName = document.getElementById('username').value.trim();
+            const userName = document.getElementById('username').value.trim();
             if (!userName) {
                 showError('Please enter your name');
                 return;
@@ -300,31 +354,31 @@
                 socket.emit('send_message', {
                     room: currentRoom,
                     message: message,
-                    sender: userName
+                    sender: document.getElementById('username').value.trim()
                 });
                 input.value = '';
                 addMessage(message, 'You');
-                socket.emit('stop_typing', { room: currentRoom, username: userName });
+                socket.emit('stop_typing', { room: currentRoom, username: document.getElementById('username').value.trim() });
             }
         }
 
         function handleTyping() {
             if (currentRoom) {
-                socket.emit('typing', { room: currentRoom, username: userName });
+                socket.emit('typing', { room: currentRoom, username: document.getElementById('username').value.trim() });
                 
                 if (typingTimeout) {
                     clearTimeout(typingTimeout);
                 }
                 
                 typingTimeout = setTimeout(() => {
-                    socket.emit('stop_typing', { room: currentRoom, username: userName });
+                    socket.emit('stop_typing', { room: currentRoom, username: document.getElementById('username').value.trim() });
                 }, 1000);
             }
         }
 
         socket.on('typing_status', (data) => {
             const typingIndicator = document.getElementById('typing-indicator');
-            if (data.isTyping && data.username !== userName) {
+            if (data.isTyping && data.username !== document.getElementById('username').value.trim()) {
                 typingIndicator.querySelector('span').textContent = `${data.username} is typing...`;
                 typingIndicator.classList.remove('hidden');
             } else {
@@ -333,7 +387,7 @@
         });
 
         socket.on('new_message', (data) => {
-            if (data.sender !== userName) {
+            if (data.sender !== document.getElementById('username').value.trim()) {
                 addMessage(data.message, data.sender);
             }
         });
