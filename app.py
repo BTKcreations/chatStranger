@@ -73,7 +73,8 @@ def handle_join_waiting(data):
             
             # Create a room
             room = secrets.token_hex(8)
-            join_room(room)
+            join_room(room, sid=user1['sid'])
+            join_room(room, sid=user2['sid'])
             
             # Store room information
             user_rooms[user1['sid']] = room
